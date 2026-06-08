@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo de Estado - Edificio de 10 Pisos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f1f5f9;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .main-card {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            padding: 24px;
+        }
+        .piso-row {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .piso-label {
+            width: 80px;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+        .deptos-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            width: 100%;
+        }
+        .btn-depto {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 0;
+            font-weight: 700;
+            color: white;
+            font-size: 0.9rem;
+            text-align: center;
+            transition: transform 0.1s ease, opacity 0.2s;
+        }
+        .btn-depto:hover {
+            transform: scale(1.03);
+            opacity: 0.9;
+        }
+        .bg-al-dia {
+            background-color: #1e7e34 !important; /* Verde sólido de tu captura */
+        }
+        .bg-con-deuda {
+            background-color: #bd2130 !important; /* Rojo sólido de tu captura */
+        }
+        .card-detalle {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+        }
+        /* Estilos específicos calcados de la imagen */
+        .seccion-qr-contenedor {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            background: #ffffff;
+            text-align: center;
+        }
+        .texto-escanear {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #475569;
+            letter-spacing: 0.5px;
+        }
+        .img-qr-banco {
+            max-width: 145px;
+            height: auto;
+        }
+        .formato-tabla-conceptos .list-group-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.92rem;
+        }
+        .formato-tabla-conceptos .list-group-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark m-0" style="font-size: 1.65rem;">🏢 Monitoreo de Estado - Edificio de 10 Pisos</h2>
+            <p class="text-muted m-0 small">Sincronización basada estrictamente en la Columna N (Estado).</p>
+        </div>
+        <button class="btn btn-primary fw-bold px-4 py-2 mt-3 mt-md-0 shadow-sm" style="border-radius: 8px; font-size: 0.9rem;" onclick="sincronizarConSheets()">
+            <i class="bi bi-arrow-clockwise" id="iconSync"></i> Sincronizar Datos
+        </button>
+    </div>
+
+    <div id="errorBanner" class="alert alert-danger d-none fw-bold shadow-sm mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> <span id="errorMessage">Error</span>
+    </div>
+
+    <div id="loader" class="text-center py-5 main-card mb-4 d-none">
+        <div class="spinner-border text-primary mb-2" role="status"></div>
+        <p class="text-muted m-0 fw-semibold">Conectando con la base de datos de Google Sheets...</p>
+    </div>
+
+    <div class="row g-4" id="panelPrincipal">
+        
+        <div class="col-lg-7">
+            <div class="main-card h-100">
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                    <h6 class="m-0 fw-bold text-secondary text-uppercase tracking-wider" style="font-size: 0.85rem;"><i class="bi bi-grid-3x3-gap-fill me-1"></i> Vista de Departamentos</h6>
+                    <div class="d-flex gap-1" style="font-size: 0.75rem;">
+                        <span class="badge bg-success px-2 py-1.5 rounded-1">Al día</span>
+                        <span class="badge bg-danger px-2 py-1.5 rounded-1">Con deuda</span>
+                    </div>
+                </div>
+
+                <div id="contenedorPisos"></div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card card-detalle h-100 bg-white">
+                <div class="card-header bg-dark text-white p-3 d-flex align-items-center" style="border-top-left-radius: 16px; border-top-right-radius: 16px;">
+                    <h6 class="m-0 fw-bold text-uppercase" style="font-size: 0.85rem; letter-spacing: 0.5px;"><i class="bi bi-search me-1"></i> Estado de Cuenta</h6>
+                </div>
+                
+                <div class="card-body p-4 d-flex flex-column justify-content-center" id="panelDetalle">
+                    
+                    <div class="text-center text-muted py-5" id="placeholderText">
+                        <i class="bi bi-building-up display-4 d-block mb-3 text-secondary opacity-50"></i>
+                        <p class="fw-semibold small">Selecciona cualquier departamento de la matriz izquierda para auditar sus deudas o registrar pagos.</p>
+                    </div>
+
+                    <div id="datosContenedor" class="d-none w-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="fw-bold m-0 text-primary" style="font-size: 1.65rem;">Depto <span id="lblDepto">---</span></h3>
+                            <span id="badgeEstado" class="badge fs-6 px-3 py-2 rounded-1">---</span>
+                        </div>
+
+                        <div id="seccionQR" class="mb-4 d-none">
+                            <div class="seccion-qr-contenedor shadow-sm">
+                                <div class="texto-escanear mb-2"><i class="bi bi-qr-code-scan me-1"></i> ESCANEE AQUÍ PARA PAGAR</div>
+                                <img src="https://lh3.googleusercontent.com/d/1yDyw_3kyydL5pZOqpKe2Ou1LXXC95V-o" alt="QR Banco" class="img-qr-banco">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <small class="text-muted fw-bold text-uppercase d-block mb-1" style="font-size: 0.72rem; letter-spacing: 0.5px;">Inquilino / Propietario</small>
+                            <span class="fs-5 fw-bold text-dark" id="lblInquilino">---</span>
+                        </div>
+
+                        <h6 class="fw-bold mb-2 border-bottom pb-1 text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">Desglose de Conceptos</h6>
+                        
+                        <div class="list-group list-group-flush formato-tabla-conceptos mb-3">
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Alquiler Base</span> <span class="fw-bold text-dark" id="valAlquiler">0.00 Bs.</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Mantenimiento</span> <span class="fw-bold text-dark" id="valMantenimiento">0.00 Bs.</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Limpieza</span> <span class="fw-bold text-dark" id="valLimpieza">0.00 Bs.</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Seguridad</span> <span class="fw-bold text-dark" id="valSeguridad">0.00 Bs.</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Agua</span> <span class="fw-bold text-dark" id="valAgua">0.00 Bs.</span>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="text-secondary">Electricidad</span> <span class="fw-bold text-dark" id="valElectricidad">0.00 Bs.</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center py-3 border-top border-bottom mb-4">
+                            <span class="fw-bold text-secondary" style="font-size: 0.88rem;">Monto Total Acumulado:</span>
+                            <span class="h4 m-0 fw-bold text-danger" id="valTotal">0.00 Bs.</span>
+                        </div>
+
+                        <div id="seccionComprobante" class="mb-4 d-none">
+                            <label class="form-label fw-bold text-dark small mb-1"><i class="bi bi-cloud-arrow-up-fill text-primary"></i> Registrar Comprobante de Pago</label>
+                            <div class="text-muted mb-2" style="font-size: 0.75rem;">Seleccione la foto o captura del voucher:</div>
+                            <input class="form-control form-control-sm mb-3" type="file" id="fileVoucher" style="border-radius: 6px;">
+                            
+                            <div class="d-grid">
+                                <button class="btn btn-primary fw-bold py-2 shadow-sm" style="border-radius: 8px; font-size: 0.88rem;" onclick="registrarYValidarPago()">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Registrar y Validar Pago
+                                </button>
+                                <div id="msgExitoComprobante" class="alert alert-success py-2 px-3 text-center fw-bold mt-2 d-none shadow-sm" style="font-size: 0.78rem; border-radius: 6px;">
+                                    ¡Pago registrado con éxito! El sistema se actualizará.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let baseDatosEdificio = {};
+
+    function sincronizarConSheets() {
+        const loader = document.getElementById('loader');
+        const panel = document.getElementById('panelPrincipal');
+        const errorBanner = document.getElementById('errorBanner');
+        const icon = document.getElementById('iconSync');
+        
+        loader.classList.remove('d-none');
+        panel.style.opacity = '0.2';
+        errorBanner.classList.add('d-none');
+        icon.className = "bi bi-arrow-clockwise spinner-border spinner-border-sm me-1";
+
+        if (typeof google !== 'undefined' && google.script) {
+            google.script.run
+                .withSuccessHandler(function(datosDesdeSheets) {
+                    loader.classList.add('d-none');
+                    panel.style.opacity = '1';
+                    icon.className = "bi bi-arrow-clockwise";
+                    baseDatosEdificio = datosDesdeSheets;
+                    renderizarEdificio();
+                })
+                .withFailureHandler(function(err) {
+                    loader.classList.add('d-none');
+                    panel.style.opacity = '1';
+                    icon.className = "bi bi-arrow-clockwise";
+                    errorBanner.classList.remove('d-none');
+                    document.getElementById('errorMessage').innerText = "Fallo de conexión con el Sheet: " + err.message;
+                })
+                .obtenerDatosEdificio();
+        } else {
+            // MODO DE PRUEBAS LOCALES (Carga exacta de deudores de tu imagen)
+            setTimeout(() => {
+                loader.classList.add('d-none');
+                panel.style.opacity = '1';
+                icon.className = "bi bi-arrow-clockwise";
+                
+                generarSimulacionLocal();
+                renderizarEdificio();
+                
+                // Forzar la apertura automática del departamento 901 para emular tu captura al cargar
+                mostrarDetalles("901");
+            }, 600);
+        }
+    }
+
+    function generarSimulacionLocal() {
+        // Mapeo exacto de los botones rojos de tu captura de pantalla
+        const deudoresSheet = [
+            "101", "103", "104", 
+            "201", "202", "204", 
+            "501", "502", 
+            "602", "603", "604", 
+            "701", 
+            "802", "803", 
+            "902", "903", "901"
+        ];
+        
+        for (let piso = 1; piso <= 10; piso++) {
+            for (let depto = 1; depto <= 4; depto++) {
+                let id = piso === 10 ? `100${depto}` : `${piso}0${depto}`;
+                let deudor = deudoresSheet.includes(id);
+                
+                baseDatosEdificio[id] = {
+                    inquilino: deudor ? "Elena Gómez" : "Inquilino Solvente",
+                    fono: "59170000000",
+                    alquiler: deudor ? 2200.00 : 0.00, 
+                    mantenimiento: deudor ? 100.00 : 0.00,
+                    limpieza: deudor ? 50.00 : 0.00, 
+                    seguridad: deudor ? 80.00 : 0.00,
+                    agua: deudor ? 24.32 : 0.00, 
+                    electricidad: deudor ? 61.83 : 0.00,
+                    totalMora: deudor ? 2516.15 : 0.00,
+                    estadoSheet: deudor ? "Con deuda" : "Al día"
+                };
+            }
+        }
+    }
+
+    function renderizarEdificio() {
+        try {
+            const contenedor = document.getElementById('contenedorPisos');
+            contenedor.innerHTML = ""; 
+
+            for (let p = 10; p >= 1; p--) {
+                let row = document.createElement('div');
+                row.className = 'piso-row';
+
+                let label = document.createElement('div');
+                label.className = 'piso-label';
+                label.innerText = `Piso ${p}`;
+                row.appendChild(label);
+
+                let grid = document.createElement('div');
+                grid.className = 'deptos-grid';
+
+                for (let d = 1; d <= 4; d++) {
+                    let idDepto = p === 10 ? `100${d}` : `${p}0${d}`;
+                    let deptoData = baseDatosEdificio[String(idDepto)] || { estadoSheet: "Al día" };
+                    
+                    let claseColor = (deptoData.estadoSheet.trim() === "Con deuda") ? 'bg-con-deuda' : 'bg-al-dia';
+
+                    let btn = document.createElement('button');
+                    btn.className = `btn-depto ${claseColor}`;
+                    btn.innerText = idDepto;
+                    btn.onclick = () => mostrarDetalles(idDepto);
+
+                    grid.appendChild(btn);
+                }
+
+                row.appendChild(grid);
+                contenedor.appendChild(row);
+            }
+        } catch (err) {
+            console.error("Error renderizando la matriz: ", err);
+        }
+    }
+
+    function mostrarDetalles(idDepto) {
+        let deptoData = baseDatosEdificio[String(idDepto)];
+        if (!deptoData) return;
+
+        document.getElementById('placeholderText').classList.add('d-none');
+        document.getElementById('datosContenedor').classList.remove('d-none');
+        document.getElementById('msgExitoComprobante').classList.add('d-none');
+        document.getElementById('fileVoucher').value = ""; 
+
+        document.getElementById('lblDepto').innerText = idDepto;
+        document.getElementById('lblInquilino').innerText = deptoData.inquilino;
+        document.getElementById('valTotal').innerText = `${deptoData.totalMora.toFixed(2)} Bs.`;
+
+        document.getElementById('valAlquiler').innerText = `${deptoData.alquiler.toFixed(2)} Bs.`;
+        document.getElementById('valMantenimiento').innerText = `${deptoData.mantenimiento.toFixed(2)} Bs.`;
+        document.getElementById('valLimpieza').innerText = `${deptoData.limpieza.toFixed(2)} Bs.`;
+        document.getElementById('valSeguridad').innerText = `${deptoData.seguridad.toFixed(2)} Bs.`;
+        document.getElementById('valAgua').innerText = `${deptoData.agua.toFixed(2)} Bs.`;
+        document.getElementById('valElectricidad').innerText = `${deptoData.electricidad.toFixed(2)} Bs.`;
+
+        const badge = document.getElementById('badgeEstado');
+        const seccionQR = document.getElementById('seccionQR');
+        const seccionComprobante = document.getElementById('seccionComprobante');
+
+        if (deptoData.estadoSheet.trim() === "Con deuda") {
+            badge.innerText = "Con deuda";
+            badge.className = "badge bg-danger fs-6 px-3 py-1.5 rounded-1";
+            seccionQR.classList.remove('d-none');
+            seccionComprobante.classList.remove('d-none');
+        } else {
+            badge.innerText = "Al día";
+            badge.className = "badge bg-success fs-6 px-3 py-1.5 rounded-1";
+            seccionQR.classList.add('d-none');
+            seccionComprobante.classList.add('d-none');
+        }
+    }
+
+    function registrarYValidarPago() {
+        const fileInput = document.getElementById('fileVoucher');
+        if (fileInput.files.length === 0) {
+            alert("Por favor, suba una captura de pantalla del comprobante de pago.");
+            return;
+        }
+        document.getElementById('msgExitoComprobante').classList.remove('d-none');
+    }
+
+    function enviarMoraWhatsApp() {
+        let depto = document.getElementById('lblDepto').innerText;
+        let inquilino = document.getElementById('lblInquilino').innerText;
+        let total = document.getElementById('valTotal').innerText;
+        
+        // Formateo del enlace directo API de WhatsApp Business
+        let mensaje = encodeURIComponent(`Estimado(a) ${inquilino}, le recordamos que su cuenta correspondiente al Departamento ${depto} presenta un saldo pendiente de ${total}. Agradecemos regularizar el pago mediante el código QR del portal.`);
+        window.open(`https://api.whatsapp.com/send?phone=59170000000&text=${mensaje}`, '_blank');
+    }
+
+    window.onload = function() {
+        sincronizarConSheets();
+    };
+</script>
+</body>
+</html>
